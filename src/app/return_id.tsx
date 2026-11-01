@@ -1,13 +1,20 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useBorrowedItems } from '@/contexts/borrowed-items-context';
+
 export default function ReturnIdPage() {
   const router = useRouter();
+  const { itemId } = useLocalSearchParams<{ itemId?: string }>();
+  const { borrowedItems, removeBorrowedItem } = useBorrowedItems();
+  const borrowedItem = borrowedItems.find((item) => item.id === itemId) ??
+    (itemId ? undefined : borrowedItems[0]);
   
   // State เช็กว่าผู้ใช้ได้ทำการ "ถ่ายรูป" แล้วหรือยัง
   const [hasPhoto, setHasPhoto] = useState(false);
+  const [isReturning, setIsReturning] = useState(false);
 
   // ฟังก์ชันจำลองการถ่ายรูป
   const handleTakePhoto = () => {
@@ -16,23 +23,29 @@ export default function ReturnIdPage() {
   };
 
   // ฟังก์ชันยืนยันการคืน
-  const handleConfirmReturn = () => {
+  const handleConfirmReturn = async () => {
     if (!hasPhoto) {
       Alert.alert('แจ้งเตือน', 'กรุณาถ่ายภาพอุปกรณ์ก่อนทำการคืนครับ');
       return;
     }
 
-    // เมื่อถ่ายรูปแล้วและกดยืนยัน จะแสดง Popup สำเร็จและเด้งกลับหน้าหลัก
-    Alert.alert(
-      'คืนอุปกรณ์สำเร็จ', 
-      'ขอบคุณที่คืนอุปกรณ์ตรงเวลาครับ!',
-      [
-        {
-          text: 'ตกลง',
-          onPress: () => router.replace('/home')
-        }
-      ]
-    );
+    if (!borrowedItem || isReturning) {
+      Alert.alert('ไม่พบรายการ', 'ไม่พบอุปกรณ์ที่กำลังยืมอยู่');
+      return;
+    }
+
+    setIsReturning(true);
+    try {
+      await removeBorrowedItem(borrowedItem.id);
+      Alert.alert('คืนอุปกรณ์สำเร็จ', 'ขอบคุณที่คืนอุปกรณ์ตรงเวลาครับ!', [
+        { text: 'ตกลง', onPress: () => router.replace('/home') },
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'ไม่สามารถบันทึกการคืนอุปกรณ์ได้';
+      Alert.alert('คืนอุปกรณ์ไม่สำเร็จ', message);
+    } finally {
+      setIsReturning(false);
+    }
   };
 
   return (
@@ -47,14 +60,18 @@ export default function ReturnIdPage() {
       </View>
 
       <View style={styles.content}>
+        <Text style={styles.deviceText}>
+          อุปกรณ์: {borrowedItem?.name ?? 'ไม่พบรายการที่กำลังยืม'}
+        </Text>
         <Text style={styles.instructionText}>
           กรุณาถ่ายภาพอุปกรณ์เพื่อยืนยันสภาพก่อนทำการคืน
         </Text>
 
         {/* กล่องสำหรับถ่ายภาพ */}
         <Pressable 
-          style={[styles.cameraBox, hasPhoto && styles.cameraBoxSuccess]} 
+          style={[styles.cameraBox, hasPhoto && styles.cameraBoxSuccess]}
           onPress={handleTakePhoto}
+          disabled={!borrowedItem || isReturning}
         >
           {hasPhoto ? (
             <>
@@ -71,10 +88,13 @@ export default function ReturnIdPage() {
 
         {/* ปุ่มยืนยันการคืน */}
         <Pressable 
-          style={[styles.confirmButton, !hasPhoto && styles.confirmButtonDisabled]} 
+          style={[styles.confirmButton, (!hasPhoto || isReturning) && styles.confirmButtonDisabled]}
           onPress={handleConfirmReturn}
+          disabled={isReturning}
         >
-          <Text style={styles.confirmButtonText}>ยืนยันการคืนอุปกรณ์</Text>
+          <Text style={styles.confirmButtonText}>
+            {isReturning ? 'กำลังบันทึก...' : 'ยืนยันการคืนอุปกรณ์'}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -116,6 +136,13 @@ const styles = StyleSheet.create({
     color: '#475569',
     textAlign: 'center',
     marginBottom: 32,
+    marginTop: 16,
+  },
+  deviceText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    textAlign: 'center',
     marginTop: 16,
   },
   cameraBox: {

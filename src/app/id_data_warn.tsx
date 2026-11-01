@@ -1,21 +1,16 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-// ข้อมูลจำลองรายการอุปกรณ์ที่ "เลยกำหนดคืน" (เกิน 3 วัน)
-const OVERDUE_ITEMS = [
-  { 
-    id: '1', 
-    name: 'กล้อง', 
-    icon: 'camera',
-    borrowDate: '19 ต.ค. 2026', 
-    returnDate: '22 ต.ค. 2026', 
-    overdueDays: 3 
-  },
-] as const;
+import { useBorrowedItems } from '@/contexts/borrowed-items-context';
+import { formatEquipmentDate, getOverdueDays } from '@/utils/equipment-dates';
 
 export default function IdDataWarnPage() {
   const router = useRouter();
+  const { borrowedItems, isLoading } = useBorrowedItems();
+  const overdueItems = borrowedItems
+    .map((item) => ({ ...item, overdueDays: getOverdueDays(item.returnDate) }))
+    .filter((item) => item.overdueDays > 0);
 
   return (
     <View style={styles.container}>
@@ -29,9 +24,14 @@ export default function IdDataWarnPage() {
       </View>
 
       {/* รายการอุปกรณ์ที่เกินกำหนด */}
-      {OVERDUE_ITEMS.length > 0 ? (
+      {isLoading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color="#ef4444" />
+          <Text style={styles.emptyText}>กำลังโหลดรายการแจ้งเตือน...</Text>
+        </View>
+      ) : overdueItems.length > 0 ? (
         <FlatList
-          data={OVERDUE_ITEMS}
+          data={overdueItems}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           renderItem={({ item }) => (
@@ -46,15 +46,15 @@ export default function IdDataWarnPage() {
                 <MaterialCommunityIcons name={item.icon} size={40} color="#475569" />
                 <View style={styles.deviceInfo}>
                   <Text style={styles.deviceName}>{item.name}</Text>
-                  <Text style={styles.dateText}>วันที่ยืม: {item.borrowDate}</Text>
-                  <Text style={styles.dateTextWarning}>กำหนดคืน: {item.returnDate}</Text>
+                  <Text style={styles.dateText}>วันที่ยืม: {formatEquipmentDate(item.borrowDate)}</Text>
+                  <Text style={styles.dateTextWarning}>กำหนดคืน: {formatEquipmentDate(item.returnDate)}</Text>
                 </View>
               </View>
 
               {/* ปุ่มคืนอุปกรณ์ (เน้นสีแดงเพราะด่วน) */}
               <Pressable
                 style={styles.returnButton}
-                onPress={() => router.push('/return_id')}
+                onPress={() => router.push({ pathname: '/return_id', params: { itemId: item.id } })}
               >
                 <Text style={styles.returnButtonText}>คืนอุปกรณ์ทันที</Text>
               </Pressable>

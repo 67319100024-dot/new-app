@@ -1,25 +1,14 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, type ComponentProps } from 'react';
+import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
-
-// ข้อมูลจำลองอุปกรณ์ 4 ชิ้น (Mock Data)
-const EQUIPMENT_DATA: {
-  id: string;
-  name: string;
-  icon: IconName;
-  status: string;
-}[] = [
-  { id: '1', name: 'กล้อง', icon: 'camera', status: 'ว่าง' },
-  { id: '2', name: 'โน้ตบุ๊ก', icon: 'laptop', status: 'ไม่ว่าง' },
-  { id: '3', name: 'สายชาร์จ USB-C', icon: 'usb', status: 'ว่าง' },
-  { id: '4', name: 'โปรเจกเตอร์', icon: 'projector', status: 'ไม่ว่าง' },
-];
+import { EQUIPMENT_DATA } from '@/constants/equipment';
+import { useBorrowedItems } from '@/contexts/borrowed-items-context';
 
 export default function HomePage() {
   const router = useRouter();
+  const { borrowedItems } = useBorrowedItems();
   const [searchQuery, setSearchQuery] = useState('');
   const query = searchQuery.trim().toLowerCase();
   const filteredEquipment = EQUIPMENT_DATA.filter((item) =>
@@ -50,25 +39,33 @@ export default function HomePage() {
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
-            <Pressable 
+            <Pressable
               style={styles.card}
               // ลิงก์ไปหน้าที่ 3 พร้อมแนบข้อมูลของชิ้นที่กดไปด้วย
               onPress={() => router.push({
                 pathname: '/id_page',
-                params: { id: item.id, name: item.name, icon: item.icon, status: item.status }
+                params: { id: item.id }
               })}
             >
               <View style={styles.cardLeft}>
-              <MaterialCommunityIcons name={item.icon} size={32} color="#475569" />
+                <MaterialCommunityIcons name={item.icon} size={32} color="#475569" />
                 <Text style={styles.deviceName}>{item.name}</Text>
               </View>
-              
+
               {/* สถานะอุปกรณ์ */}
               <Text style={[
-                styles.statusText, 
-                { color: item.status === 'ว่าง' ? '#16a34a' : '#dc2626' }
+                styles.statusText,
+                {
+                  color: item.status === 'ว่าง' &&
+                    !borrowedItems.some((borrowedItem) => borrowedItem.equipmentId === item.id)
+                    ? '#16a34a'
+                    : '#dc2626',
+                }
               ]}>
-                {item.status}
+                {item.status === 'ว่าง' &&
+                !borrowedItems.some((borrowedItem) => borrowedItem.equipmentId === item.id)
+                  ? 'ว่าง'
+                  : 'ไม่ว่าง'}
               </Text>
             </Pressable>
           )}
@@ -84,12 +81,12 @@ export default function HomePage() {
 
         <Pressable style={styles.footerItem} onPress={() => router.push('/id_data')}>
           <MaterialCommunityIcons name="calendar" size={28} color="#64748b" />
-          <Text style={styles.footerText}>ปฏิทิน</Text>
+          <Text style={styles.footerText}>รายการยืม</Text>
         </Pressable>
 
         <Pressable style={styles.footerItem} onPress={() => router.push('/id_data_warn')}>
           <MaterialCommunityIcons name="bell" size={28} color="#64748b" />
-          <Text style={styles.footerText}>แจ้งเตือน</Text>
+          <Text style={styles.footerText}>กำหนดคืน</Text>
         </Pressable>
 
         <Pressable style={styles.footerItem}>

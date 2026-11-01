@@ -1,33 +1,44 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState, type ComponentProps } from 'react';
+import { useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+import { EQUIPMENT_DATA } from '@/constants/equipment';
+import { useBorrowedItems } from '@/contexts/borrowed-items-context';
 
 export default function IdPage() {
   const router = useRouter();
-  const { name, icon, status } = useLocalSearchParams<{
-    name?: string;
-    icon?: IconName;
-    status?: string;
-  }>();
-
-  // State สำหรับเปิด/ปิด Popup แจ้งเตือน
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { borrowedItems, isLoading, addBorrowedItem } = useBorrowedItems();
   const [showPopup, setShowPopup] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // ตัวแปรจำลองว่า "มีของค้างอยู่หรือไม่" 
-  // (ตั้งเป็น true ไว้เพื่อให้เห็น Popup แจ้งเตือนตามเงื่อนไข ถ้าเปลี่ยนเป็น false จะยืมได้เลย)
-  const hasPendingItem = true; 
+  const equipment = EQUIPMENT_DATA.find((item) => item.id === id);
+  const hasPendingItem = borrowedItems.length > 0;
+  const isAvailable = equipment?.status === 'ว่าง' &&
+    !borrowedItems.some((item) => item.equipmentId === equipment.id);
 
-  const handleBorrow = () => {
+  const handleBorrow = async () => {
+    if (isLoading || isSaving || !equipment) {
+      return;
+    }
+
     if (hasPendingItem) {
-      // ถ้ามีของค้าง ให้แสดง Popup
       setShowPopup(true);
-    } else {
-      // ถ้าไม่มีของค้าง ให้ผ่านเงื่อนไข
-      Alert.alert('สำเร็จ', 'บันทึกการขอยืมอุปกรณ์เรียบร้อยแล้ว');
-      router.replace('/home');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await addBorrowedItem(equipment);
+      Alert.alert('สำเร็จ', 'บันทึกการขอยืมอุปกรณ์เรียบร้อยแล้ว', [
+        { text: 'ตกลง', onPress: () => router.replace('/home') },
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลการยืมได้';
+      Alert.alert('บันทึกไม่สำเร็จ', message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -35,14 +46,14 @@ export default function IdPage() {
     <View style={styles.container}>
       {/* ข้อมูลอุปกรณ์ */}
       <View style={styles.card}>
-        <MaterialCommunityIcons name={icon ?? 'help-circle'} size={120} color="#475569" />
-        <Text style={styles.title}>{name || 'ชื่ออุปกรณ์'}</Text>
-        
+        <MaterialCommunityIcons name={equipment?.icon ?? 'help-circle'} size={120} color="#475569" />
+        <Text style={styles.title}>{equipment?.name ?? 'ไม่พบอุปกรณ์'}</Text>
+
         <Text style={[
-          styles.status, 
-          { color: status === 'ว่าง' ? '#16a34a' : '#dc2626' }
+          styles.status,
+          { color: isAvailable ? '#16a34a' : '#dc2626' }
         ]}>
-          สถานะ: {status || 'ไม่ทราบ'}
+          สถานะ: {isLoading ? 'กำลังโหลด...' : isAvailable ? 'ว่าง' : 'ไม่ว่าง'}
         </Text>
 
         {/* เงื่อนไขการยืม */}
@@ -53,9 +64,15 @@ export default function IdPage() {
       </View>
 
       {/* ปุ่มยืนยันการยืม (เช็กว่าของว่างหรือไม่) */}
-      {status === 'ว่าง' ? (
-        <Pressable style={styles.borrowButton} onPress={handleBorrow}>
-          <Text style={styles.borrowButtonText}>ยืนยันการขอยืมอุปกรณ์</Text>
+      {isAvailable ? (
+        <Pressable
+          style={[styles.borrowButton, (isLoading || isSaving) && styles.disabledButton]}
+          onPress={handleBorrow}
+          disabled={isLoading || isSaving}
+        >
+          <Text style={styles.borrowButtonText}>
+            {isSaving ? 'กำลังบันทึก...' : 'ยืนยันการขอยืมอุปกรณ์'}
+          </Text>
         </Pressable>
       ) : (
         <Pressable style={[styles.borrowButton, styles.disabledButton]} disabled>
@@ -72,8 +89,8 @@ export default function IdPage() {
             
             <View style={styles.modalButtonGroup}>
               {/* ปุ่ม 1: คืนอุปกรณ์ */}
-              <Pressable 
-                style={styles.modalButtonReturn} 
+              <Pressable
+                style={styles.modalButtonReturn}
                 onPress={() => {
                   setShowPopup(false);
                   router.push('/id_data');
@@ -83,7 +100,7 @@ export default function IdPage() {
               </Pressable>
 
               {/* ปุ่ม 2: ปิด */}
-              <Pressable 
+              <Pressable
                 style={styles.modalButtonClose} 
                 onPress={() => {
                   setShowPopup(false);

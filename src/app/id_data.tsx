@@ -1,20 +1,13 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-// ข้อมูลจำลองรายการอุปกรณ์ที่กำลังยืมอยู่ (Mock Data)
-const BORROWED_ITEMS = [
-  { 
-    id: '1', 
-    name: 'กล้อง', 
-    icon: 'camera',
-    borrowDate: '22 ต.ค. 2026', 
-    returnDate: '25 ต.ค. 2026' 
-  },
-] as const;
+import { useBorrowedItems } from '@/contexts/borrowed-items-context';
+import { formatEquipmentDate } from '@/utils/equipment-dates';
 
 export default function IdDataPage() {
   const router = useRouter();
+  const { borrowedItems, isLoading } = useBorrowedItems();
 
   return (
     <View style={styles.container}>
@@ -28,9 +21,14 @@ export default function IdDataPage() {
       </View>
 
       {/* รายการอุปกรณ์ที่ยืม */}
-      {BORROWED_ITEMS.length > 0 ? (
+      {isLoading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.emptyText}>กำลังโหลดรายการยืม...</Text>
+        </View>
+      ) : borrowedItems.length > 0 ? (
         <FlatList
-          data={BORROWED_ITEMS}
+          data={borrowedItems}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           renderItem={({ item }) => (
@@ -39,15 +37,15 @@ export default function IdDataPage() {
                 <MaterialCommunityIcons name={item.icon} size={40} color="#475569" />
                 <View style={styles.deviceInfo}>
                   <Text style={styles.deviceName}>{item.name}</Text>
-                  <Text style={styles.dateText}>วันที่ยืม: {item.borrowDate}</Text>
-                  <Text style={styles.dateTextWarning}>กำหนดคืน: {item.returnDate}</Text>
+                  <Text style={styles.dateText}>วันที่ยืม: {formatEquipmentDate(item.borrowDate)}</Text>
+                  <Text style={styles.dateTextWarning}>กำหนดคืน: {formatEquipmentDate(item.returnDate)}</Text>
                 </View>
               </View>
 
               {/* ปุ่มคืนอุปกรณ์ */}
               <Pressable
-                style={styles.returnButton} 
-                onPress={() => router.push('/return_id')}
+                style={styles.returnButton}
+                onPress={() => router.push({ pathname: '/return_id', params: { itemId: item.id } })}
               >
                 <Text style={styles.returnButtonText}>คืนอุปกรณ์</Text>
               </Pressable>
